@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package tonicsample;
+
+service SampleService {
+  rpc GetResponse (QueryRequest) returns (stream SampleResponse) {}
+}
+
+message QueryRequest {
+  string query = 1;
+}
+
+message SampleResponse {
+  repeated int64 hash = 1;
+}
