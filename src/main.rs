@@ -12,16 +12,21 @@ use tonic_sample::sample_service_server::{SampleService, SampleServiceServer};
 use tonic_sample::SampleResponse;
 use rand::Rng;
 use tokio::sync::mpsc::{Sender, Receiver};
+use std::thread;
 
 
 #[derive(Default)]
 pub struct SampleTonicService;
 
-fn generate_response(sender: tokio::sync::mpsc::UnboundedSender<Result<SampleResponse, tonic::Status>>) {
-    let mut rng = rand::thread_rng();
+fn generate_response(sender: tokio::sync::mpsc::Sender<Result<SampleResponse, tonic::Status>>) {
+
 
 
     for i in 0..30 { // 30 streams
+   //     let sender_clone = sender.clone();
+
+    //    thread::spawn(move ||{
+        let mut rng = rand::thread_rng();
         let mut hashes = Vec::new();
         for j in 0..400_000 { // 400k i64's. 3.2MB per stream. 96MB total
             hashes.push(rng.gen::<i64>());
@@ -29,7 +34,9 @@ fn generate_response(sender: tokio::sync::mpsc::UnboundedSender<Result<SampleRes
         let response = SampleResponse {
             hash: hashes
         };
+            println!("Sending {:?}", i);
         sender.send(Ok(response));
+      // });
     }
 }
 
@@ -43,13 +50,13 @@ impl SampleService for SampleTonicService {
         request: Request<QueryRequest>,
     ) -> Result<Response<Self::GetResponseStream>, tonic::Status> {
         let r = request.into_inner();
-        let  (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
+        let  (sender, receiver) = tokio::sync::mpsc::channel(5);
         let curr_time = SystemTime::now();
 
         generate_response(sender);
         println!("Time took to generate response {:?}", SystemTime::now().duration_since(curr_time).unwrap());
         Ok(Response::new(Box::pin(
-            tokio_stream::wrappers::UnboundedReceiverStream::new(receiver),
+            tokio_stream::wrappers::ReceiverStream::new(receiver),
         )))
 
     }
