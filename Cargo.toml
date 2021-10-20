@@ -20,3 +20,7 @@ hyper = { version = "0.14", features = ["full"] }
 
 [build-dependencies]
 tonic-build = { version = "0.5.2", features = ["prost", "compression"] }
+
+[[bin]]
+name="client"
+path= "src/client/client.rs"
