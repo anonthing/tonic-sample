@@ -13,25 +13,28 @@ use tokio::sync::mpsc::{Receiver, Sender};
 use tonic_sample::sample_service_server::{SampleService, SampleServiceServer};
 use tonic_sample::QueryRequest;
 use tonic_sample::SampleResponse;
+use std::sync::Arc;
 
 #[derive(Default)]
 pub struct SampleTonicService;
 
 async fn generate_response(sender: tokio::sync::mpsc::Sender<Result<SampleResponse, tonic::Status>>) {
+    let mut rng = rand::thread_rng();
+    let mut hashes = Vec::new();
+    for j in 0..400_000 {
+        // 400k i64's. 3.2MB per stream. 96MB total
+        hashes.push(rng.gen::<i64>());
+    }
+
     for i in 0..30 {
         // 30 streams
+        let hashes_clone = hashes.clone();
         let sender_clone = sender.clone();
-
         tokio::spawn(async move {
-            let mut rng = rand::thread_rng();
-            let mut hashes = Vec::new();
-            for j in 0..400_000 {
-                // 400k i64's. 3.2MB per stream. 96MB total
-                hashes.push(rng.gen::<i64>());
-            }
-            let response = SampleResponse { hash: hashes };
-            println!("Sending {:?}", i);
-            sender_clone.send(Ok(response));
+            let response = SampleResponse { hash: hashes_clone };
+            let curr_time = SystemTime::now();
+            sender_clone.send(Ok(response)).await.unwrap();
+            println!("Time took to send {:?}", SystemTime::now().duration_since(curr_time).unwrap());
         });
     }
 }
@@ -46,7 +49,7 @@ impl SampleService for SampleTonicService {
         request: Request<QueryRequest>,
     ) -> Result<Response<Self::GetResponseStream>, tonic::Status> {
         let r = request.into_inner();
-        let (sender, receiver) = tokio::sync::mpsc::channel(5);
+        let (sender, receiver) = tokio::sync::mpsc::channel(30);
         let curr_time = SystemTime::now();
 
         generate_response(sender).await;
